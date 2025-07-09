@@ -65,7 +65,8 @@ class LifeDataManager: ObservableObject {
     // MARK: - 寿命データ設定
     func setLifeData(birthDate: Date, gender: LifeData.Gender, country: String) {
         let lifeExpectancy = getLifeExpectancy(for: country, gender: gender)
-        lifeData = LifeData(
+        self.lifeData = LifeData(
+            nickname: "",
             birthDate: birthDate,
             gender: gender,
             country: country,
