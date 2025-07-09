@@ -72,7 +72,7 @@ class OpenAIService: ObservableObject {
         let requestBody = OpenAIRequest(
             model: "gpt-3.5-turbo",
             messages: [
-                Message(role: "system", content: "あなたはLifeTuneアプリのAIコーチです。ユーザーの健康と習慣改善をサポートする親切で励ましのあるアドバイスを提供してください。"),
+                Message(role: "system", content: "あなたはLifeTuneアプリのAIコーチです。健康・習慣改善の専門家として、ユーザーの悩みや相談に対し、親身でやさしく、具体的かつ実践的な日本語アドバイスや励ましの言葉を1-2文で返してください。"),
                 Message(role: "user", content: prompt)
             ],
             max_tokens: 500,
@@ -105,11 +105,10 @@ class OpenAIService: ObservableObject {
     
     private func createChatPrompt(userMessage: String, context: String) -> String {
         return """
-        ユーザーの質問: \(userMessage)
+        ユーザーからの相談: \(userMessage)
+        \(context.isEmpty ? "" : "追加情報: \(context)")
         
-        \(context.isEmpty ? "" : "コンテキスト: \(context)")
-        
-        健康と習慣改善に関する質問に親切に回答してください。
+        上記の相談内容に対して、健康・習慣改善の専門家として、やさしく具体的な日本語アドバイスや励ましの言葉を1-2文で返してください。
         """
     }
     
