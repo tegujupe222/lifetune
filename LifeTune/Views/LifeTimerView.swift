@@ -36,6 +36,7 @@ struct LifeTimerView: View {
 // MARK: - 寿命タイマーカード
 struct LifeTimerCard: View {
     let lifeData: LifeData
+    @EnvironmentObject var lifeDataManager: LifeDataManager
     
     var body: some View {
         VStack(spacing: 20) {
@@ -57,17 +58,54 @@ struct LifeTimerCard: View {
                 }
             }
             
-            // 寿命延長効果
-            VStack(spacing: 10) {
-                Text("総寿命延長効果")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+            // 寿命変化効果
+            VStack(spacing: 15) {
+                // 延長効果
+                if lifeDataManager.totalLifeExtension > 0 {
+                    HStack {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .foregroundColor(.green)
+                        Text("寿命延長効果")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("+\(String(format: "%.1f", lifeDataManager.totalLifeExtension))時間")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.green)
+                    }
+                }
                 
-                Text("\(String(format: "%.1f", lifeData.currentLifeExpectancy - lifeData.averageLifeExpectancy))年")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(.green)
-                    .accessibilityLabel("総寿命延長効果\(String(format: "%.1f", lifeData.currentLifeExpectancy - lifeData.averageLifeExpectancy))年")
+                // 短縮効果
+                if lifeDataManager.totalLifeReduction > 0 {
+                    HStack {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.red)
+                        Text("寿命短縮効果")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("-\(String(format: "%.1f", lifeDataManager.totalLifeReduction))時間")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.red)
+                    }
+                }
+                
+                // 純変化
+                if lifeDataManager.netLifeChange != 0 {
+                    Divider()
+                    HStack {
+                        Text("純変化")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text("\(lifeDataManager.netLifeChange >= 0 ? "+" : "")\(String(format: "%.1f", lifeDataManager.netLifeChange))時間")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(lifeDataManager.netLifeChange >= 0 ? .green : .red)
+                    }
+                }
             }
             
             // 現在の予測寿命

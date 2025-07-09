@@ -7,6 +7,8 @@ class LifeDataManager: ObservableObject {
     @Published var habitImprovements: [HabitImprovement] = []
     @Published var goals: [Goal] = []
     @Published var totalLifeExtension: Double = 0
+    @Published var totalLifeReduction: Double = 0
+    @Published var netLifeChange: Double = 0
     @Published var errorMessage: String = ""
     
     private var timer: Timer?
@@ -53,7 +55,7 @@ class LifeDataManager: ObservableObject {
                 self.goals = goals
             }
             
-            calculateTotalLifeExtension()
+            calculateLifeChanges()
         } catch {
             errorMessage = "データの読み込みに失敗しました。"
         }
@@ -99,7 +101,7 @@ class LifeDataManager: ObservableObject {
         saveData()
     }
     
-    // MARK: - 習慣改善記録
+    // MARK: - 習慣改善・悪化記録
     func addHabitImprovement(type: HabitImprovement.HabitType, value: Double) {
         // バリデーション
         guard isValidHabitValue(type: type, value: value) else {
@@ -107,24 +109,24 @@ class LifeDataManager: ObservableObject {
             return
         }
         
-        let lifeExtension = calculateLifeExtension(for: type, value: value)
+        let lifeChange = calculateLifeChange(for: type, value: value)
         let improvement = HabitImprovement(
             date: Date(),
             type: type,
             value: value,
-            lifeExtension: lifeExtension
+            lifeExtension: lifeChange
         )
         
         habitImprovements.append(improvement)
         
         // 現在の寿命を更新
         if var lifeData = lifeData {
-            lifeData.currentLifeExpectancy += lifeExtension / 24 / 365.25 // 時間を年に変換
+            lifeData.currentLifeExpectancy += lifeChange / 24 / 365.25 // 時間を年に変換
             lifeData.lastUpdated = Date()
             self.lifeData = lifeData
         }
         
-        totalLifeExtension += lifeExtension
+        calculateLifeChanges()
         saveData()
     }
     
@@ -190,11 +192,21 @@ class LifeDataManager: ObservableObject {
             return value >= 0 && value <= 365
         case .alcohol:
             return value >= 0 && value <= 100
+        case .smoking_negative:
+            return value >= 0 && value <= 100 // 1日あたりの本数
+        case .alcohol_negative:
+            return value >= 0 && value <= 100 // 1日あたりの飲酒量
+        case .stress_negative:
+            return value >= 1 && value <= 10
+        case .diet_negative:
+            return value >= 1 && value <= 10
+        case .exercise_negative:
+            return value >= 0 && value <= 24 // 座り時間
         }
     }
     
-    // MARK: - 寿命延長計算
-    private func calculateLifeExtension(for type: HabitImprovement.HabitType, value: Double) -> Double {
+    // MARK: - 寿命変化計算
+    private func calculateLifeChange(for type: HabitImprovement.HabitType, value: Double) -> Double {
         switch type {
         case .sleep:
             // 睡眠時間が7-8時間の範囲で最適、それ以外は寿命短縮
@@ -229,11 +241,34 @@ class LifeDataManager: ObservableObject {
         case .alcohol:
             // 飲酒量削減に応じて寿命延長
             return value * 0.05
+        case .smoking_negative:
+            // 喫煙本数に応じて寿命短縮（1本につき0.1時間短縮）
+            return -value * 0.1
+        case .alcohol_negative:
+            // 過度な飲酒量に応じて寿命短縮
+            return -value * 0.05
+        case .stress_negative:
+            // ストレスレベル（1-10、高いほど悪い）に応じて寿命短縮
+            return -value * 0.1
+        case .diet_negative:
+            // 不健康な食事スコア（1-10）に応じて寿命短縮
+            return -value * 0.1
+        case .exercise_negative:
+            // 座り時間（時間）に応じて寿命短縮
+            return -value * 0.05
         }
     }
     
-    private func calculateTotalLifeExtension() {
-        totalLifeExtension = habitImprovements.reduce(0) { $0 + $1.lifeExtension }
+    private func calculateLifeChanges() {
+        totalLifeExtension = habitImprovements
+            .filter { !$0.type.isNegative }
+            .reduce(0) { $0 + $1.lifeExtension }
+        
+        totalLifeReduction = habitImprovements
+            .filter { $0.type.isNegative }
+            .reduce(0) { $0 + abs($1.lifeExtension) }
+        
+        netLifeChange = totalLifeExtension - totalLifeReduction
     }
     
     // MARK: - 国別平均寿命データ
@@ -277,6 +312,14 @@ class LifeDataManager: ObservableObject {
     
     func getImprovementsByType() -> [HabitImprovement.HabitType: [HabitImprovement]] {
         return Dictionary(grouping: habitImprovements) { $0.type }
+    }
+    
+    func getPositiveImprovements() -> [HabitImprovement] {
+        return habitImprovements.filter { !$0.type.isNegative }
+    }
+    
+    func getNegativeImprovements() -> [HabitImprovement] {
+        return habitImprovements.filter { $0.type.isNegative }
     }
     
     // MARK: - エラーメッセージクリア
