@@ -10,7 +10,7 @@ class OpenAIService: ObservableObject {
         return ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "dummy-key"
     }
     
-    private let baseURL = "https://api.openai.com/v1/chat/completions"
+    private let baseURL = "https://lifetune.vercel.app/api/openai-proxy"
     
     // MARK: - AIコーチング機能
     func getDailyAdvice(lifeData: LifeData, habitImprovements: [HabitImprovement]) async -> String {
