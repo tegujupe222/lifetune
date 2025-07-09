@@ -15,60 +15,55 @@ struct LifeTimerView: View {
                 )
                 .ignoresSafeArea()
                 
-                VStack(spacing: 30) {
-                    if let lifeData = lifeDataManager.lifeData {
-                        // 寿命タイマー
-                        LifeTimerCircle(lifeData: lifeData)
-                            .frame(width: 300, height: 300)
-                        
-                        // 残り時間表示
-                        VStack(spacing: 10) {
-                            Text("残り寿命")
-                                .font(.title2)
-                                .foregroundColor(.secondary)
-                            
-                            HStack(spacing: 20) {
-                                TimeUnitView(value: lifeData.remainingDays, unit: "日")
-                                TimeUnitView(value: lifeData.remainingHours, unit: "時間")
-                                TimeUnitView(value: lifeData.remainingMinutes, unit: "分")
-                                TimeUnitView(value: lifeData.remainingSeconds, unit: "秒")
+                ScrollView {
+                    VStack(spacing: 30) {
+                        if let lifeData = lifeDataManager.lifeData {
+                            // 寿命タイマー
+                            LifeTimerCircle(lifeData: lifeData)
+                                .frame(width: 300, height: 300)
+                            // 残り時間表示
+                            VStack(spacing: 10) {
+                                Text("残り寿命")
+                                    .font(.title2)
+                                    .foregroundColor(.secondary)
+                                HStack(spacing: 20) {
+                                    TimeUnitView(value: lifeData.remainingDays, unit: "日")
+                                    TimeUnitView(value: lifeData.remainingHours, unit: "時間")
+                                    TimeUnitView(value: lifeData.remainingMinutes, unit: "分")
+                                    TimeUnitView(value: lifeData.remainingSeconds, unit: "秒")
+                                }
                             }
-                        }
-                        
-                        // 寿命延長情報
-                        if lifeDataManager.totalLifeExtension > 0 {
-                            VStack(spacing: 8) {
-                                HStack {
-                                    Image(systemName: "arrow.up.circle.fill")
-                                        .foregroundColor(.green)
-                                    Text("あなたの行動で寿命が延びました！")
-                                        .font(.headline)
+                            // 寿命延長情報
+                            if lifeDataManager.totalLifeExtension > 0 {
+                                VStack(spacing: 8) {
+                                    HStack {
+                                        Image(systemName: "arrow.up.circle.fill")
+                                            .foregroundColor(.green)
+                                        Text("あなたの行動で寿命が延びました！")
+                                            .font(.headline)
+                                            .foregroundColor(.green)
+                                    }
+                                    Text("+\(String(format: "%.1f", lifeDataManager.totalLifeExtension))時間")
+                                        .font(.title)
+                                        .fontWeight(.bold)
                                         .foregroundColor(.green)
                                 }
-                                
-                                Text("+\(String(format: "%.1f", lifeDataManager.totalLifeExtension))時間")
-                                    .font(.title)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.green)
+                                .padding()
+                                .background(Color.green.opacity(0.1))
+                                .cornerRadius(15)
                             }
-                            .padding()
-                            .background(Color.green.opacity(0.1))
-                            .cornerRadius(15)
+                            // 今日の改善提案
+                            DailySuggestionCard()
+                                .environmentObject(lifeDataManager)
+                        } else {
+                            // 初期設定画面
+                            OnboardingView()
+                                .environmentObject(lifeDataManager)
                         }
-                        
-                        Spacer()
-                        
-                        // 今日の改善提案
-                        DailySuggestionCard()
-                            .environmentObject(lifeDataManager)
-                        
-                    } else {
-                        // 初期設定画面
-                        OnboardingView()
-                            .environmentObject(lifeDataManager)
                     }
+                    .padding(.vertical, 32)
+                    .padding(.horizontal)
                 }
-                .padding()
             }
             .navigationTitle("LifeTune")
             .navigationBarTitleDisplayMode(.large)
