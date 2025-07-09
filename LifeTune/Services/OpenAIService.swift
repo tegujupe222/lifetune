@@ -32,8 +32,13 @@ class OpenAIService: ObservableObject {
     
     // MARK: - プライベートメソッド
     private func sendChatRequest(prompt: String) async -> String {
+        print("🔍 OpenAI API Request - Prompt: \(prompt)")
+        print("🔑 API Key available: \(!apiKey.isEmpty && apiKey != "dummy-key")")
+        print("🌐 Base URL: \(baseURL)")
+        
         // 開発時はダミーレスポンスを返す
         if apiKey == "dummy-key" {
+            print("⚠️ Using dummy response (development mode)")
             return getDummyResponse(for: prompt)
         }
         
@@ -49,24 +54,43 @@ class OpenAIService: ObservableObject {
         
         do {
             let request = createChatRequest(prompt: prompt)
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            print("📤 Sending request to: \(request.url?.absoluteString ?? "unknown")")
+            print("📋 Request headers: \(request.allHTTPHeaderFields ?? [:])")
             
-            await MainActor.run {
-                lastResponse = response.choices.first?.message.content ?? "申し訳ございません。応答を生成できませんでした。"
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📥 Response status: \(httpResponse.statusCode)")
+                print("📥 Response headers: \(httpResponse.allHeaderFields)")
             }
             
-            return lastResponse
+            print("📄 Response data size: \(data.count) bytes")
+            
+            // レスポンスデータを文字列として出力（デバッグ用）
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📄 Response content: \(responseString)")
+            }
+            
+            let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            
+            let content = response.choices.first?.message.content ?? "申し訳ございません。応答を生成できませんでした。"
+            print("✅ AI Response: \(content)")
+            
+            await MainActor.run {
+                lastResponse = content
+            }
+            
+            return content
         } catch {
-            print("OpenAI API Error: \(error)")
-            return "申し訳ございません。エラーが発生しました。"
+            print("❌ OpenAI API Error: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
+            return "申し訳ございません。エラーが発生しました。詳細: \(error.localizedDescription)"
         }
     }
     
     private func createChatRequest(prompt: String) -> URLRequest {
         var request = URLRequest(url: URL(string: baseURL)!)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let requestBody = OpenAIRequest(

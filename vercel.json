@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/openai-proxy.js": {
+      "maxDuration": 30
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/openai-proxy",
+      "dest": "/api/openai-proxy.js"
+    }
+  ]
+} 
