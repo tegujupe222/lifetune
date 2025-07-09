@@ -4,6 +4,7 @@ import SwiftUI
 // MARK: - 寿命データモデル
 struct LifeData: Codable, Identifiable {
     let id = UUID()
+    var nickname: String // ニックネームを追加
     var birthDate: Date
     var gender: Gender
     var country: String
