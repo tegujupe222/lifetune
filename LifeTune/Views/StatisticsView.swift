@@ -22,6 +22,25 @@ struct StatisticsView: View {
                     // 改善履歴グラフ
                     ImprovementHistorySection()
                         .environmentObject(lifeDataManager)
+
+                    // --- AIコーチに相談ボタン追加 ---
+                    NavigationLink(destination: AICoachingView().environmentObject(lifeDataManager)) {
+                        HStack {
+                            Image(systemName: "brain.head.profile")
+                                .font(.title2)
+                            Text("AIコーチに相談")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(LinearGradient(gradient: Gradient(colors: [.blue, .green]), startPoint: .leading, endPoint: .trailing))
+                        .cornerRadius(16)
+                        .shadow(radius: 5)
+                    }
+                    .padding(.top, 16)
+                    // --- ここまで追加 ---
                 }
                 .padding()
             }
