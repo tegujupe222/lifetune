@@ -2,124 +2,128 @@ import SwiftUI
 
 struct LifeTimerView: View {
     @EnvironmentObject var lifeDataManager: LifeDataManager
-    @State private var showingOnboarding = false
     
     var body: some View {
         NavigationView {
-            ZStack {
-                // 背景グラデーション
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.green.opacity(0.1)]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 30) {
-                        if let lifeData = lifeDataManager.lifeData {
-                            // 寿命タイマー
-                            LifeTimerCircle(lifeData: lifeData)
-                                .frame(width: 300, height: 300)
-                            // 残り時間表示
-                            VStack(spacing: 10) {
-                                Text("残り寿命")
-                                    .font(.title2)
-                                    .foregroundColor(.secondary)
-                                HStack(spacing: 20) {
-                                    TimeUnitView(value: lifeData.remainingDays, unit: "日")
-                                    TimeUnitView(value: lifeData.remainingHours, unit: "時間")
-                                    TimeUnitView(value: lifeData.remainingMinutes, unit: "分")
-                                    TimeUnitView(value: lifeData.remainingSeconds, unit: "秒")
-                                }
-                            }
-                            // 寿命延長情報
-                            if lifeDataManager.totalLifeExtension > 0 {
-                                VStack(spacing: 8) {
-                                    HStack {
-                                        Image(systemName: "arrow.up.circle.fill")
-                                            .foregroundColor(.green)
-                                        Text("あなたの行動で寿命が延びました！")
-                                            .font(.headline)
-                                            .foregroundColor(.green)
-                                    }
-                                    Text("+\(String(format: "%.1f", lifeDataManager.totalLifeExtension))時間")
-                                        .font(.title)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.green)
-                                }
-                                .padding()
-                                .background(Color.green.opacity(0.1))
-                                .cornerRadius(15)
-                            }
-                            // 今日の改善提案
-                            DailySuggestionCard()
-                                .environmentObject(lifeDataManager)
-                        } else {
-                            // 初期設定画面
-                            OnboardingView()
-                                .environmentObject(lifeDataManager)
-                        }
+            ScrollView {
+                VStack(spacing: 20) {
+                    // 寿命タイマー
+                    if let lifeData = lifeDataManager.lifeData {
+                        LifeTimerCard(lifeData: lifeData)
+                            .accessibilityLabel("残り寿命タイマー")
+                    } else {
+                        OnboardingPrompt()
                     }
-                    .padding(.vertical, 32)
-                    .padding(.horizontal)
+                    
+                    // 今日の改善提案
+                    DailySuggestionCard()
+                        .environmentObject(lifeDataManager)
+                        .accessibilityLabel("今日の改善提案")
+                    
+                    // 最近の改善記録
+                    RecentImprovementsCard()
+                        .environmentObject(lifeDataManager)
+                        .accessibilityLabel("最近の改善記録")
                 }
+                .padding()
             }
-            .navigationTitle("LifeTune")
+            .navigationTitle("寿命タイマー")
             .navigationBarTitleDisplayMode(.large)
         }
     }
 }
 
-// MARK: - 寿命タイマー円形ゲージ
-struct LifeTimerCircle: View {
+// MARK: - 寿命タイマーカード
+struct LifeTimerCard: View {
     let lifeData: LifeData
     
-    var progress: Double {
-        let totalLifeSeconds = lifeData.currentLifeExpectancy * 365.25 * 24 * 60 * 60
-        let livedSeconds = Date().timeIntervalSince(lifeData.birthDate)
-        return min(livedSeconds / totalLifeSeconds, 1.0)
-    }
-    
     var body: some View {
-        ZStack {
-            // 背景円
-            Circle()
-                .stroke(Color.gray.opacity(0.3), lineWidth: 20)
-            
-            // 進行状況円
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [.blue, .green]),
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    style: StrokeStyle(lineWidth: 20, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-                .animation(.easeInOut(duration: 1.0), value: progress)
-            
-            // 中央テキスト
-            VStack(spacing: 5) {
-                Text("\(Int(lifeData.currentLifeExpectancy))")
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
-                
-                Text("歳")
-                    .font(.title2)
+        VStack(spacing: 20) {
+            // 残り時間表示
+            VStack(spacing: 15) {
+                Text("残り寿命")
+                    .font(.headline)
                     .foregroundColor(.secondary)
                 
+                HStack(spacing: 20) {
+                    TimeUnitView(value: lifeData.remainingDays, unit: "日")
+                        .accessibilityLabel("残り\(lifeData.remainingDays)日")
+                    
+                    TimeUnitView(value: lifeData.remainingHours, unit: "時間")
+                        .accessibilityLabel("残り\(lifeData.remainingHours)時間")
+                    
+                    TimeUnitView(value: lifeData.remainingMinutes, unit: "分")
+                        .accessibilityLabel("残り\(lifeData.remainingMinutes)分")
+                }
+            }
+            
+            // 寿命延長効果
+            VStack(spacing: 10) {
+                Text("総寿命延長効果")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Text("\(String(format: "%.1f", lifeData.currentLifeExpectancy - lifeData.averageLifeExpectancy))年")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(.green)
+                    .accessibilityLabel("総寿命延長効果\(String(format: "%.1f", lifeData.currentLifeExpectancy - lifeData.averageLifeExpectancy))年")
+            }
+            
+            // 現在の予測寿命
+            VStack(spacing: 5) {
                 Text("現在の予測寿命")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                
+                Text("\(Int(lifeData.currentLifeExpectancy))歳")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .accessibilityLabel("現在の予測寿命\(Int(lifeData.currentLifeExpectancy))歳")
             }
         }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(15)
+        .shadow(radius: 5)
     }
 }
 
-// MARK: - 時間単位表示
+// MARK: - オンボーディングプロンプト
+struct OnboardingPrompt: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "person.crop.circle.badge.plus")
+                .font(.system(size: 60))
+                .foregroundColor(.blue)
+            
+            Text("プロフィールを設定してください")
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            Text("寿命タイマーを開始するには、生年月日や性別などの基本情報を設定してください。")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            
+            NavigationLink(destination: SettingsView()) {
+                Text("設定画面へ")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.blue)
+                    .cornerRadius(10)
+            }
+            .accessibilityLabel("設定画面へ移動")
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(15)
+        .shadow(radius: 5)
+    }
+}
+
+// MARK: - 時間単位ビュー
 struct TimeUnitView: View {
     let value: Int
     let unit: String
@@ -207,6 +211,88 @@ struct SuggestionRow: View {
             
             Spacer()
         }
+        .accessibilityLabel("\(title)、\(description)")
+    }
+}
+
+// MARK: - 最近の改善記録カード
+struct RecentImprovementsCard: View {
+    @EnvironmentObject var lifeDataManager: LifeDataManager
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .foregroundColor(.green)
+                Text("最近の改善記録")
+                    .font(.headline)
+                Spacer()
+            }
+            
+            let recentImprovements = lifeDataManager.getWeeklyImprovements()
+            
+            if recentImprovements.isEmpty {
+                Text("まだ改善記録がありません。習慣改善を記録して、寿命を延ばしましょう！")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(recentImprovements.prefix(3)) { improvement in
+                        ImprovementRow(improvement: improvement)
+                    }
+                }
+            }
+            
+            NavigationLink(destination: HabitTrackingView().environmentObject(lifeDataManager)) {
+                Text("詳細を見る")
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+            }
+            .accessibilityLabel("習慣改善の詳細画面へ移動")
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(15)
+        .shadow(radius: 5)
+    }
+}
+
+// MARK: - 改善記録行
+struct ImprovementRow: View {
+    let improvement: HabitImprovement
+    
+    var body: some View {
+        HStack {
+            Image(systemName: improvement.type.icon)
+                .foregroundColor(improvement.type.color)
+                .frame(width: 20)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(improvement.type.displayName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Text("\(String(format: "%.1f", improvement.value)) - \(formatDate(improvement.date))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            Text("+\(String(format: "%.1f", improvement.lifeExtension))時間")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.green)
+        }
+        .accessibilityLabel("\(improvement.type.displayName)、値\(String(format: "%.1f", improvement.value))、寿命延長\(String(format: "%.1f", improvement.lifeExtension))時間")
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        return formatter.string(from: date)
     }
 }
 

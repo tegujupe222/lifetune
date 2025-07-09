@@ -7,9 +7,17 @@ class LifeDataManager: ObservableObject {
     @Published var habitImprovements: [HabitImprovement] = []
     @Published var goals: [Goal] = []
     @Published var totalLifeExtension: Double = 0
+    @Published var errorMessage: String = ""
     
     private var timer: Timer?
     private let userDefaults = UserDefaults.standard
+    
+    // MARK: - UserDefaults Keys
+    private enum Keys {
+        static let lifeData = "lifeData"
+        static let habitImprovements = "habitImprovements"
+        static let goals = "goals"
+    }
     
     init() {
         loadData()
@@ -29,41 +37,55 @@ class LifeDataManager: ObservableObject {
     
     // MARK: - データ保存・読み込み
     private func loadData() {
-        if let data = userDefaults.data(forKey: "lifeData"),
-           let lifeData = try? JSONDecoder().decode(LifeData.self, from: data) {
-            self.lifeData = lifeData
+        do {
+            if let data = userDefaults.data(forKey: Keys.lifeData),
+               let lifeData = try JSONDecoder().decode(LifeData.self, from: data) {
+                self.lifeData = lifeData
+            }
+            
+            if let data = userDefaults.data(forKey: Keys.habitImprovements),
+               let improvements = try JSONDecoder().decode([HabitImprovement].self, from: data) {
+                self.habitImprovements = improvements
+            }
+            
+            if let data = userDefaults.data(forKey: Keys.goals),
+               let goals = try JSONDecoder().decode([Goal].self, from: data) {
+                self.goals = goals
+            }
+            
+            calculateTotalLifeExtension()
+        } catch {
+            errorMessage = "データの読み込みに失敗しました。"
         }
-        
-        if let data = userDefaults.data(forKey: "habitImprovements"),
-           let improvements = try? JSONDecoder().decode([HabitImprovement].self, from: data) {
-            self.habitImprovements = improvements
-        }
-        
-        if let data = userDefaults.data(forKey: "goals"),
-           let goals = try? JSONDecoder().decode([Goal].self, from: data) {
-            self.goals = goals
-        }
-        
-        calculateTotalLifeExtension()
     }
     
     private func saveData() {
-        if let lifeData = lifeData,
-           let data = try? JSONEncoder().encode(lifeData) {
-            userDefaults.set(data, forKey: "lifeData")
-        }
-        
-        if let data = try? JSONEncoder().encode(habitImprovements) {
-            userDefaults.set(data, forKey: "habitImprovements")
-        }
-        
-        if let data = try? JSONEncoder().encode(goals) {
-            userDefaults.set(data, forKey: "goals")
+        do {
+            if let lifeData = lifeData,
+               let data = try JSONEncoder().encode(lifeData) {
+                userDefaults.set(data, forKey: Keys.lifeData)
+            }
+            
+            if let data = try JSONEncoder().encode(habitImprovements) {
+                userDefaults.set(data, forKey: Keys.habitImprovements)
+            }
+            
+            if let data = try JSONEncoder().encode(goals) {
+                userDefaults.set(data, forKey: Keys.goals)
+            }
+        } catch {
+            errorMessage = "データの保存に失敗しました。"
         }
     }
     
     // MARK: - 寿命データ設定
     func setLifeData(birthDate: Date, gender: LifeData.Gender, country: String) {
+        // バリデーション
+        guard !country.isEmpty else {
+            errorMessage = "国名を選択してください。"
+            return
+        }
+        
         let lifeExpectancy = getLifeExpectancy(for: country, gender: gender)
         self.lifeData = LifeData(
             nickname: "",
@@ -79,6 +101,12 @@ class LifeDataManager: ObservableObject {
     
     // MARK: - 習慣改善記録
     func addHabitImprovement(type: HabitImprovement.HabitType, value: Double) {
+        // バリデーション
+        guard isValidHabitValue(type: type, value: value) else {
+            errorMessage = "無効な値です。正しい範囲で入力してください。"
+            return
+        }
+        
         let lifeExtension = calculateLifeExtension(for: type, value: value)
         let improvement = HabitImprovement(
             date: Date(),
@@ -102,8 +130,24 @@ class LifeDataManager: ObservableObject {
     
     // MARK: - 目標管理
     func addGoal(title: String, type: HabitImprovement.HabitType, targetValue: Double, deadline: Date) {
+        // バリデーション
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "目標タイトルを入力してください。"
+            return
+        }
+        
+        guard isValidHabitValue(type: type, value: targetValue) else {
+            errorMessage = "無効な目標値です。正しい範囲で入力してください。"
+            return
+        }
+        
+        guard deadline > Date() else {
+            errorMessage = "期限は未来の日付を設定してください。"
+            return
+        }
+        
         let goal = Goal(
-            title: title,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             type: type,
             targetValue: targetValue,
             currentValue: 0,
@@ -116,10 +160,36 @@ class LifeDataManager: ObservableObject {
     }
     
     func updateGoalProgress(goalId: UUID, currentValue: Double) {
-        if let index = goals.firstIndex(where: { $0.id == goalId }) {
-            goals[index].currentValue = currentValue
-            goals[index].isCompleted = currentValue >= goals[index].targetValue
-            saveData()
+        guard let index = goals.firstIndex(where: { $0.id == goalId }) else { return }
+        
+        // バリデーション
+        guard isValidHabitValue(type: goals[index].type, value: currentValue) else {
+            errorMessage = "無効な値です。正しい範囲で入力してください。"
+            return
+        }
+        
+        goals[index].currentValue = currentValue
+        goals[index].isCompleted = currentValue >= goals[index].targetValue
+        saveData()
+    }
+    
+    // MARK: - バリデーション
+    private func isValidHabitValue(type: HabitImprovement.HabitType, value: Double) -> Bool {
+        switch type {
+        case .sleep:
+            return value >= 0 && value <= 24
+        case .steps:
+            return value >= 0 && value <= 50000
+        case .exercise:
+            return value >= 0 && value <= 480 // 8時間
+        case .diet:
+            return value >= 1 && value <= 10
+        case .stress:
+            return value >= 1 && value <= 10
+        case .smoking:
+            return value >= 0 && value <= 365
+        case .alcohol:
+            return value >= 0 && value <= 100
         }
     }
     
@@ -207,5 +277,10 @@ class LifeDataManager: ObservableObject {
     
     func getImprovementsByType() -> [HabitImprovement.HabitType: [HabitImprovement]] {
         return Dictionary(grouping: habitImprovements) { $0.type }
+    }
+    
+    // MARK: - エラーメッセージクリア
+    func clearErrorMessage() {
+        errorMessage = ""
     }
 } 

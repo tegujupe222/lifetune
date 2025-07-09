@@ -1,18 +1,82 @@
 import Foundation
 import Combine
+import Security
 
 class OpenAIService: ObservableObject {
     @Published var isLoading = false
     @Published var lastResponse: String = ""
+    @Published var errorMessage: String = ""
     
     private var apiKey: String {
-        // Vercel環境変数から取得（開発時はダミー値）
-        let key = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "dummy-key"
-        print("🔑 API Key check: \(key.isEmpty ? "empty" : key == "dummy-key" ? "dummy" : "valid")")
-        return key
+        // 本番環境では環境変数から取得、開発環境ではKeychainから取得
+        #if DEBUG
+        return getAPIKeyFromKeychain() ?? ""
+        #else
+        return ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+        #endif
     }
     
     private let baseURL = "https://lifetune.vercel.app/api/openai-proxy"
+    
+    // MARK: - Keychain管理
+    private func getAPIKeyFromKeychain() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: "OpenAI_API_Key",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let apiKey = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        
+        return apiKey
+    }
+    
+    private func saveAPIKeyToKeychain(_ apiKey: String) -> Bool {
+        guard let data = apiKey.data(using: .utf8) else { return false }
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: "OpenAI_API_Key",
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        
+        let status = SecItemAdd(query as CFDictionary, nil)
+        
+        if status == errSecDuplicateItem {
+            // 既に存在する場合は更新
+            let updateQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: "OpenAI_API_Key"
+            ]
+            
+            let updateAttributes: [String: Any] = [
+                kSecValueData as String: data
+            ]
+            
+            return SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary) == errSecSuccess
+        }
+        
+        return status == errSecSuccess
+    }
+    
+    // MARK: - APIキー設定
+    func setAPIKey(_ apiKey: String) -> Bool {
+        #if DEBUG
+        return saveAPIKeyToKeychain(apiKey)
+        #else
+        // 本番環境では環境変数を使用
+        return true
+        #endif
+    }
     
     // MARK: - AIコーチング機能
     func getDailyAdvice(lifeData: LifeData, habitImprovements: [HabitImprovement]) async -> String {
@@ -34,18 +98,18 @@ class OpenAIService: ObservableObject {
     
     // MARK: - プライベートメソッド
     private func sendChatRequest(prompt: String) async -> String {
-        print("🔍 OpenAI API Request - Prompt: \(prompt)")
-        print("🔑 API Key available: \(!apiKey.isEmpty && apiKey != "dummy-key")")
-        print("🌐 Base URL: \(baseURL)")
-        
-        // 開発時はダミーレスポンスを返す（一時的に無効化）
-        if apiKey == "dummy-key" {
-            print("⚠️ API Key not found, but continuing with API request...")
-            // return getDummyResponse(for: prompt) // 一時的にコメントアウト
+        // APIキーの検証
+        guard !apiKey.isEmpty else {
+            let errorMessage = "APIキーが設定されていません。設定画面でAPIキーを入力してください。"
+            await MainActor.run {
+                self.errorMessage = errorMessage
+            }
+            return errorMessage
         }
         
         await MainActor.run {
             isLoading = true
+            errorMessage = ""
         }
         
         defer {
@@ -56,28 +120,20 @@ class OpenAIService: ObservableObject {
         
         do {
             let request = createChatRequest(prompt: prompt)
-            print("📤 Sending request to: \(request.url?.absoluteString ?? "unknown")")
-            print("📋 Request method: \(request.httpMethod ?? "unknown")")
-            print("📋 Request headers: \(request.allHTTPHeaderFields ?? [:])")
+            let (data, httpResponse) = try await URLSession.shared.data(for: request)
             
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            if let httpResponse = response as? HTTPURLResponse {
-                print("📥 Response status: \(httpResponse.statusCode)")
-                print("📥 Response headers: \(httpResponse.allHeaderFields)")
+            if let httpResponse = httpResponse as? HTTPURLResponse {
+                if !httpResponse.statusCode.isSuccess {
+                    let errorMessage = getErrorMessage(for: httpResponse.statusCode)
+                    await MainActor.run {
+                        self.errorMessage = errorMessage
+                    }
+                    return errorMessage
+                }
             }
             
-            print("📄 Response data size: \(data.count) bytes")
-            
-            // レスポンスデータを文字列として出力（デバッグ用）
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("📄 Response content: \(responseString)")
-            }
-            
-            let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-            
-            let content = response.choices.first?.message.content ?? "申し訳ございません。応答を生成できませんでした。"
-            print("✅ AI Response: \(content)")
+            let openAIResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            let content = openAIResponse.choices.first?.message.content ?? "申し訳ございません。応答を生成できませんでした。"
             
             await MainActor.run {
                 lastResponse = content
@@ -85,9 +141,11 @@ class OpenAIService: ObservableObject {
             
             return content
         } catch {
-            print("❌ OpenAI API Error: \(error)")
-            print("❌ Error details: \(error.localizedDescription)")
-            return "申し訳ございません。エラーが発生しました。詳細: \(error.localizedDescription)"
+            let errorMessage = getErrorMessage(for: error)
+            await MainActor.run {
+                self.errorMessage = errorMessage
+            }
+            return errorMessage
         }
     }
     
@@ -95,6 +153,7 @@ class OpenAIService: ObservableObject {
         var request = URLRequest(url: URL(string: baseURL)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30.0 // 30秒のタイムアウト
         
         let requestBody = OpenAIRequest(
             model: "gpt-3.5-turbo",
@@ -109,16 +168,46 @@ class OpenAIService: ObservableObject {
         do {
             let jsonData = try JSONEncoder().encode(requestBody)
             request.httpBody = jsonData
-            
-            // リクエストボディの内容をログ出力
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-                print("📤 Request body: \(jsonString)")
-            }
         } catch {
-            print("❌ Failed to encode request body: \(error)")
+            // エンコードエラーは稀なので、基本的なエラーメッセージを返す
         }
         
         return request
+    }
+    
+    // MARK: - エラーメッセージ生成
+    private func getErrorMessage(for statusCode: Int) -> String {
+        switch statusCode {
+        case 400:
+            return "リクエストが正しくありません。入力内容を確認してください。"
+        case 401:
+            return "認証エラーが発生しました。APIキーを確認してください。"
+        case 403:
+            return "アクセスが拒否されました。APIキーの権限を確認してください。"
+        case 429:
+            return "リクエストが多すぎます。しばらく時間をおいて再度お試しください。"
+        case 500...599:
+            return "サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。"
+        default:
+            return "通信エラーが発生しました。インターネット接続を確認してください。"
+        }
+    }
+    
+    private func getErrorMessage(for error: Error) -> String {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet:
+                return "インターネットに接続されていません。"
+            case .timedOut:
+                return "通信がタイムアウトしました。しばらく時間をおいて再度お試しください。"
+            case .cannotFindHost:
+                return "サーバーに接続できません。"
+            default:
+                return "通信エラーが発生しました。インターネット接続を確認してください。"
+            }
+        }
+        
+        return "予期しないエラーが発生しました。しばらく時間をおいて再度お試しください。"
     }
     
     // MARK: - プロンプト生成
@@ -166,17 +255,6 @@ class OpenAIService: ObservableObject {
         上記の情報を基に、目標達成に向けた励ましと具体的なアドバイスを提供してください。
         """
     }
-    
-    // MARK: - ダミーレスポンス（開発用）
-    private func getDummyResponse(for prompt: String) -> String {
-        if prompt.contains("今日のユーザーへの励まし") {
-            return "素晴らしい改善の記録ですね！今日も小さな一歩を積み重ねて、健康な未来を築いていきましょう。特に睡眠改善の記録が印象的です。"
-        } else if prompt.contains("目標達成に向けた励まし") {
-            return "目標に向かって着実に進んでいますね！完璧を求めすぎず、継続を大切にしてください。小さな進歩も大きな成果につながります。"
-        } else {
-            return "健康と習慣改善について、何かお手伝いできることはありますか？具体的なアドバイスや励ましの言葉をお届けできます。"
-        }
-    }
 }
 
 // MARK: - OpenAI API データモデル
@@ -206,4 +284,11 @@ struct AICoachingData {
     let lastUpdated: Date
     let userMood: String?
     let suggestedActions: [String]
+}
+
+// MARK: - HTTP Status Code Extension
+extension Int {
+    var isSuccess: Bool {
+        return 200...299 ~= self
+    }
 } 

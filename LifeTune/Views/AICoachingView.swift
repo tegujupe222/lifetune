@@ -11,6 +11,13 @@ struct AICoachingView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
+                    // エラーメッセージ表示
+                    if !openAIService.errorMessage.isEmpty {
+                        ErrorMessageView(message: openAIService.errorMessage) {
+                            openAIService.errorMessage = ""
+                        }
+                    }
+                    
                     // AIコーチングカード
                     AICoachingCard(
                         advice: dailyAdvice,
@@ -71,6 +78,33 @@ struct AICoachingView: View {
                 isLoadingAdvice = false
             }
         }
+    }
+}
+
+// MARK: - エラーメッセージビュー
+struct ErrorMessageView: View {
+    let message: String
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+            
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.primary)
+            
+            Spacer()
+            
+            Button(action: onDismiss) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
     }
 }
 
@@ -200,12 +234,13 @@ struct QuickActionButton: View {
                     .fontWeight(.medium)
                     .foregroundColor(.primary)
             }
-            .frame(height: 80)
             .frame(maxWidth: .infinity)
+            .padding()
             .background(Color(.systemBackground))
             .cornerRadius(12)
             .shadow(radius: 3)
         }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
