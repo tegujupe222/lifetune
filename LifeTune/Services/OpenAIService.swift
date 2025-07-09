@@ -7,7 +7,9 @@ class OpenAIService: ObservableObject {
     
     private var apiKey: String {
         // Vercel環境変数から取得（開発時はダミー値）
-        return ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "dummy-key"
+        let key = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "dummy-key"
+        print("🔑 API Key check: \(key.isEmpty ? "empty" : key == "dummy-key" ? "dummy" : "valid")")
+        return key
     }
     
     private let baseURL = "https://lifetune.vercel.app/api/openai-proxy"
@@ -36,10 +38,10 @@ class OpenAIService: ObservableObject {
         print("🔑 API Key available: \(!apiKey.isEmpty && apiKey != "dummy-key")")
         print("🌐 Base URL: \(baseURL)")
         
-        // 開発時はダミーレスポンスを返す
+        // 開発時はダミーレスポンスを返す（一時的に無効化）
         if apiKey == "dummy-key" {
-            print("⚠️ Using dummy response (development mode)")
-            return getDummyResponse(for: prompt)
+            print("⚠️ API Key not found, but continuing with API request...")
+            // return getDummyResponse(for: prompt) // 一時的にコメントアウト
         }
         
         await MainActor.run {
@@ -55,6 +57,7 @@ class OpenAIService: ObservableObject {
         do {
             let request = createChatRequest(prompt: prompt)
             print("📤 Sending request to: \(request.url?.absoluteString ?? "unknown")")
+            print("📋 Request method: \(request.httpMethod ?? "unknown")")
             print("📋 Request headers: \(request.allHTTPHeaderFields ?? [:])")
             
             let (data, response) = try await URLSession.shared.data(for: request)
