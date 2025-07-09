@@ -103,7 +103,18 @@ class OpenAIService: ObservableObject {
             temperature: 0.7
         )
         
-        request.httpBody = try? JSONEncoder().encode(requestBody)
+        do {
+            let jsonData = try JSONEncoder().encode(requestBody)
+            request.httpBody = jsonData
+            
+            // リクエストボディの内容をログ出力
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print("📤 Request body: \(jsonString)")
+            }
+        } catch {
+            print("❌ Failed to encode request body: \(error)")
+        }
+        
         return request
     }
     
