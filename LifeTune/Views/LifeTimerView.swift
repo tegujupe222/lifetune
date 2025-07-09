@@ -31,6 +31,7 @@ struct LifeTimerView: View {
                                 TimeUnitView(value: lifeData.remainingDays, unit: "日")
                                 TimeUnitView(value: lifeData.remainingHours, unit: "時間")
                                 TimeUnitView(value: lifeData.remainingMinutes, unit: "分")
+                                TimeUnitView(value: lifeData.remainingSeconds, unit: "秒")
                             }
                         }
                         
